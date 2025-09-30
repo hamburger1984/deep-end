@@ -14,19 +14,47 @@ A Progressive Web App for maintaining a personal diary that syncs with your Next
 
 ## Setup
 
-1. **Nextcloud App Password**: Create an app-specific password in your Nextcloud settings (Personal → Security → Devices & sessions → Create new app password)
+### Method 1: App Password (Recommended for Personal Use)
+
+1. **Create App Password**: In your Nextcloud settings (Personal → Security → Devices & sessions → Create new app password)
 
 2. **Open the App**: Open `index.html` in your web browser
 
-3. **Connect to Nextcloud**: Enter your:
+3. **Choose Authentication**: Select "🔑 App Password" method
+
+4. **Connect**: Enter your:
    - Nextcloud URL (e.g., `https://cloud.example.com`)
    - Username
-   - App password (not your regular password!)
+   - App password (generated in step 1)
 
-4. **Choose Diary Folder**: Use the interactive folder browser to:
-   - Navigate through your Nextcloud folders
-   - Create new folders if needed (📁 Create New Folder button)
-   - Select the folder where your diary will be stored (✓ Use This Folder button)
+### Method 2: OAuth2 (More Secure)
+
+1. **Create OAuth2 App**: In Nextcloud admin settings:
+   - Go to Settings → Security → OAuth 2.0 clients
+   - Add a new client with name "Diary PWA"
+   - Set redirect URI to your app URL (e.g., `http://localhost:8000`)
+   - Note the Client ID and Client Secret
+
+2. **Open the App**: Open `index.html` in your web browser
+
+3. **Choose Authentication**: Select "🔐 OAuth2" method
+
+4. **Connect**: Enter your:
+   - Nextcloud URL (e.g., `https://cloud.example.com`)
+   - OAuth2 Client ID (from step 1)
+   - OAuth2 Client Secret (from step 1)
+
+5. **Authorize**: 
+   - Click "Connect with OAuth2"
+   - Authorize in the popup window
+   - Copy the access token and paste it in the app
+
+### Final Steps (Both Methods)
+
+**Choose Diary Folder**: Use the interactive folder browser to:
+- Navigate through your Nextcloud folders
+- Create new folders if needed (📁 Create New Folder button)
+- Select the folder where your diary will be stored (✓ Use This Folder button)
 
 ## Usage
 
@@ -60,8 +88,10 @@ Another entry without custom title
 
 ## Technical Notes
 
-- Uses WebDAV to communicate with Nextcloud
-- Credentials are stored in browser localStorage
-- Only today's and yesterday's entries can be edited
-- Supports offline usage with service worker caching
-- Loads 3 months of entries at a time for performance
+- **Authentication**: Supports both app passwords (basic auth) and OAuth2 tokens
+- **Storage**: Credentials/tokens are stored in browser localStorage
+- **Security**: OAuth2 provides better security with token-based access
+- **Editing**: Only today's and yesterday's entries can be edited
+- **Offline**: Supports offline usage with service worker caching
+- **Performance**: Loads 3 months of entries at a time
+- **WebDAV**: Uses Nextcloud WebDAV API for file operations

@@ -6,6 +6,19 @@ class FolderBrowser {
     this.setupEventListeners();
   }
 
+  getAuthHeaders() {
+    if (this.config.authType === "oauth2" && this.config.accessToken) {
+      return {
+        Authorization: `Bearer ${this.config.accessToken}`,
+      };
+    } else {
+      return {
+        Authorization:
+          "Basic " + btoa(`${this.config.username}:${this.config.password}`),
+      };
+    }
+  }
+
   setupEventListeners() {
     document.getElementById("breadcrumb-home").addEventListener("click", () => {
       this.navigateToPath("");
@@ -61,8 +74,7 @@ class FolderBrowser {
       const response = await fetch(url, {
         method: "PROPFIND",
         headers: {
-          Authorization:
-            "Basic " + btoa(`${this.config.username}:${this.config.password}`),
+          ...this.getAuthHeaders(),
           Depth: "1",
         },
       });
@@ -205,10 +217,7 @@ class FolderBrowser {
 
       const response = await fetch(url, {
         method: "MKCOL",
-        headers: {
-          Authorization:
-            "Basic " + btoa(`${this.config.username}:${this.config.password}`),
-        },
+        headers: this.getAuthHeaders(),
       });
 
       if (!response.ok) {
@@ -270,10 +279,32 @@ class DiaryApp {
   }
 
   setupEventListeners() {
-    // Setup form
-    document.getElementById("setup-form").addEventListener("submit", (e) => {
+    // Auth method selection
+    document
+      .getElementById("select-app-password")
+      .addEventListener("click", () => {
+        this.selectAuthMethod("app-password");
+      });
+
+    document.getElementById("select-oauth2").addEventListener("click", () => {
+      this.selectAuthMethod("oauth2");
+    });
+
+    // Auth forms
+    document
+      .getElementById("app-password-form")
+      .addEventListener("submit", (e) => {
+        e.preventDefault();
+        this.handleAppPasswordAuth();
+      });
+
+    document.getElementById("oauth2-form").addEventListener("submit", (e) => {
       e.preventDefault();
-      this.handleSetup();
+      this.handleOAuth2Auth();
+    });
+
+    document.getElementById("use-token-btn").addEventListener("click", () => {
+      this.handleTokenAuth();
     });
 
     // Settings button
@@ -308,6 +339,154 @@ class DiaryApp {
         ticking = true;
       }
     });
+  }
+
+  selectAuthMethod(method) {
+    // Update button states
+    document
+      .getElementById("select-app-password")
+      .classList.toggle("active", method === "app-password");
+    document
+      .getElementById("select-oauth2")
+      .classList.toggle("active", method === "oauth2");
+
+    // Show/hide forms
+    document
+      .getElementById("app-password-form")
+      .classList.toggle("hidden", method !== "app-password");
+    document
+      .getElementById("oauth2-form")
+      .classList.toggle("hidden", method !== "oauth2");
+    document.getElementById("oauth2-token-form").classList.add("hidden");
+  }
+
+  async handleAppPasswordAuth() {
+    const url = document.getElementById("nextcloud-url").value;
+    const username = document.getElementById("username").value;
+    const password = document.getElementById("app-password").value;
+
+    const config = {
+      url: url.endsWith("/") ? url.slice(0, -1) : url,
+      username,
+      password,
+      authType: "basic",
+    };
+
+    try {
+      // Test connection
+      await this.testConnection(config);
+
+      // Show folder browser
+      this.folderBrowser = new FolderBrowser(config);
+      await this.folderBrowser.show();
+
+      // Set up folder selection handler
+      const selectBtn = document.getElementById("select-current-btn");
+      selectBtn.replaceWith(selectBtn.cloneNode(true));
+
+      document
+        .getElementById("select-current-btn")
+        .addEventListener("click", async () => {
+          const finalConfig = this.folderBrowser.selectCurrentFolder();
+          finalConfig.authType = "basic";
+          this.saveConfig(finalConfig);
+          await this.showMainScreen();
+        });
+    } catch (error) {
+      alert("Connection failed: " + error.message);
+    }
+  }
+
+  async handleOAuth2Auth() {
+    const url = document.getElementById("oauth-nextcloud-url").value;
+    const clientId = document.getElementById("client-id").value;
+    const clientSecret = document.getElementById("client-secret").value;
+
+    const config = {
+      url: url.endsWith("/") ? url.slice(0, -1) : url,
+      clientId,
+      clientSecret,
+      authType: "oauth2",
+    };
+
+    try {
+      // Generate OAuth2 authorization URL
+      const authUrl = this.generateOAuth2Url(config);
+
+      // Open OAuth2 authorization in new window
+      const authWindow = window.open(authUrl, "oauth2", "width=600,height=700");
+
+      // Show token input form
+      document.getElementById("oauth2-form").classList.add("hidden");
+      document.getElementById("oauth2-token-form").classList.remove("hidden");
+
+      // Store config for later use
+      this.pendingOAuth2Config = config;
+
+      alert(
+        "Please authorize the application in the opened window, then copy and paste the access token below.",
+      );
+    } catch (error) {
+      alert("OAuth2 setup failed: " + error.message);
+    }
+  }
+
+  generateOAuth2Url(config) {
+    const redirectUri = window.location.origin + window.location.pathname;
+    const state = Math.random().toString(36).substring(7);
+
+    const params = new URLSearchParams({
+      response_type: "code",
+      client_id: config.clientId,
+      redirect_uri: redirectUri,
+      state: state,
+      scope: "read write",
+    });
+
+    // Store state for validation
+    sessionStorage.setItem("oauth2_state", state);
+
+    return `${config.url}/apps/oauth2/authorize?${params.toString()}`;
+  }
+
+  async handleTokenAuth() {
+    const token = document.getElementById("access-token").value.trim();
+
+    if (!token) {
+      alert("Please enter an access token");
+      return;
+    }
+
+    const config = {
+      ...this.pendingOAuth2Config,
+      accessToken: token,
+      authType: "oauth2",
+    };
+
+    try {
+      // Test connection with token
+      await this.testConnectionWithToken(config);
+
+      // Show folder browser
+      this.folderBrowser = new FolderBrowser(config);
+      await this.folderBrowser.show();
+
+      // Set up folder selection handler
+      const selectBtn = document.getElementById("select-current-btn");
+      selectBtn.replaceWith(selectBtn.cloneNode(true));
+
+      document
+        .getElementById("select-current-btn")
+        .addEventListener("click", async () => {
+          const finalConfig = this.folderBrowser.selectCurrentFolder();
+          finalConfig.authType = "oauth2";
+          finalConfig.accessToken = token;
+          this.saveConfig(finalConfig);
+          await this.showMainScreen();
+        });
+    } catch (error) {
+      alert("Token authentication failed: " + error.message);
+    }
   }
 
   async handleSetup() {
@@ -346,20 +525,52 @@ class DiaryApp {
   }
 
   async testConnection(config) {
-    const response = await fetch(
-      `${config.url}/remote.php/dav/files/${config.username}/`,
-      {
-        method: "PROPFIND",
-        headers: {
-          Authorization:
-            "Basic " + btoa(`${config.username}:${config.password}`),
-          Depth: "0",
-        },
+    const headers = this.getAuthHeaders(config);
+    let testUrl;
+
+    if (config.authType === "oauth2") {
+      // For OAuth2, test with a simpler endpoint first
+      testUrl = `${config.url}/ocs/v2.php/cloud/user`;
+    } else {
+      testUrl = `${config.url}/remote.php/dav/files/${config.username}/`;
+    }
+
+    const response = await fetch(testUrl, {
+      method: config.authType === "oauth2" ? "GET" : "PROPFIND",
+      headers: {
+        ...headers,
+        ...(config.authType !== "oauth2" && { Depth: "0" }),
       },
-    );
+    });
 
     if (!response.ok) {
       throw new Error("Authentication failed");
+    }
+  }
+
+  async testConnectionWithToken(config) {
+    const response = await fetch(`${config.url}/ocs/v2.php/cloud/user`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${config.accessToken}`,
+        "OCS-APIRequest": "true",
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error("Token authentication failed");
+    }
+  }
+
+  getAuthHeaders(config) {
+    if (config.authType === "oauth2" && config.accessToken) {
+      return {
+        Authorization: `Bearer ${config.accessToken}`,
+      };
+    } else {
+      return {
+        Authorization: "Basic " + btoa(`${config.username}:${config.password}`),
+      };
     }
   }
 
@@ -458,10 +669,7 @@ class DiaryApp {
 
     const response = await fetch(url, {
       method: "GET",
-      headers: {
-        Authorization:
-          "Basic " + btoa(`${this.config.username}:${this.config.password}`),
-      },
+      headers: this.getAuthHeaders(this.config),
     });
 
     if (!response.ok) {
@@ -477,8 +685,7 @@ class DiaryApp {
     const response = await fetch(url, {
       method: "PUT",
       headers: {
-        Authorization:
-          "Basic " + btoa(`${this.config.username}:${this.config.password}`),
+        ...this.getAuthHeaders(this.config),
         "Content-Type": "text/plain",
       },
       body: content,
