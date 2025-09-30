@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Diary PWA</title>
+    <link rel="manifest" href="manifest.json" />
+    <meta name="theme-color" content="#2196f3" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div id="app">
+      <!-- Connection Setup -->
+      <div id="setup-screen" class="screen">
+        <h1>📝 Diary Setup</h1>
+        <form id="setup-form">
+          <div class="form-group">
+            <label for="nextcloud-url">Nextcloud URL:</label>
+            <input
+              type="url"
+              id="nextcloud-url"
+              placeholder="https://cloud.example.com"
+              required
+            />
+          </div>
+          <div class="form-group">
+            <label for="username">Username:</label>
+            <input type="text" id="username" required />
+          </div>
+          <div class="form-group">
+            <label for="app-password">App Password:</label>
+            <input type="password" id="app-password" required />
+            <small
+              >Generate an app-specific password in Nextcloud settings</small
+            >
+          </div>
+          <button type="submit">Connect</button>
+        </form>
+      </div>
+
+      <!-- Folder Browser -->
+      <div id="folder-browser-screen" class="screen hidden">
+        <h1>📁 Choose Diary Folder</h1>
+
+        <div class="folder-browser">
+          <div class="breadcrumb">
+            <button id="breadcrumb-home" class="breadcrumb-item">
+              🏠 Home
+            </button>
+            <span id="breadcrumb-path"></span>
+          </div>
+
+          <div class="folder-actions">
+            <button id="create-folder-btn">📁 Create New Folder</button>
+            <button id="select-current-btn" class="primary">
+              ✓ Use This Folder
+            </button>
+          </div>
+
+          <div id="folder-list" class="folder-list">
+            <!-- Folders will be loaded here -->
+          </div>
+
+          <div id="folder-loading" class="hidden">Loading folders...</div>
+        </div>
+
+        <!-- Create Folder Modal -->
+        <div id="create-folder-modal" class="modal hidden">
+          <div class="modal-content">
+            <h3>Create New Folder</h3>
+            <input
+              type="text"
+              id="new-folder-name"
+              placeholder="Enter folder name"
+              maxlength="255"
+            />
+            <div class="modal-actions">
+              <button id="cancel-create-btn">Cancel</button>
+              <button id="confirm-create-btn" class="primary">Create</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Main App -->
+      <div id="main-screen" class="screen hidden">
+        <header>
+          <h1>📝 Diary</h1>
+          <button id="settings-btn">⚙️</button>
+        </header>
+
+        <main>
+          <!-- Today's Entry Form -->
+          <div id="today-entry" class="entry-form">
+            <div class="date-header">
+              <h2 id="today-date"></h2>
+              <input
+                type="text"
+                id="custom-title"
+                placeholder="Add a title..."
+                maxlength="100"
+              />
+            </div>
+            <textarea
+              id="entry-text"
+              placeholder="Start writing your diary entry..."
+            ></textarea>
+          </div>
+
+          <!-- Entries Timeline -->
+          <div id="entries-container">
+            <!-- Entries will be loaded here -->
+          </div>
+
+          <div id="loading" class="hidden">Loading older entries...</div>
+        </main>
+      </div>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>
