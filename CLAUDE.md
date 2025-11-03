@@ -1,10 +1,10 @@
 # Development Guidelines for Claude
 
-This file contains instructions for Claude (or other AI assistants) working on the Diary PWA project.
+This file contains instructions for Claude (or other AI assistants) working on the Deep End project.
 
 ## Project Overview
 
-**Diary PWA** is a Progressive Web App for personal diary keeping that syncs with Nextcloud. Key features:
+**Deep End** is a Progressive Web App for personal journaling and reflection that syncs with Nextcloud. Created as a space for introspection away from the noise of social media and constant connectivity. Key features:
 - Vanilla JavaScript (no frameworks)
 - WebDAV API for Nextcloud sync
 - Session-based commit system

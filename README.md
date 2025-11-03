@@ -1,6 +1,10 @@
-# Diary PWA
+# Deep End
 
-A Progressive Web App for maintaining a personal diary that syncs with your Nextcloud instance. Features intelligent session management, multi-device support, and automatic conflict resolution.
+*Taking time to dive deep into your own thoughts and feelings*
+
+A Progressive Web App for personal reflection and journaling that syncs with your Nextcloud instance. In a world of fast-paced social media, endless news cycles, and constant connectivity, Deep End provides a quiet space to focus inward and reflect on what matters to you.
+
+Features intelligent session management, multi-device support, and automatic conflict resolution.
 
 ## Features
 

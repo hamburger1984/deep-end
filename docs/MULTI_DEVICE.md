@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Diary PWA is designed to work seamlessly across multiple devices and handles writing across day boundaries intelligently. This document explains how these features work.
+The Deep End is designed to work seamlessly across multiple devices and handles writing across day boundaries intelligently. This document explains how these features work.
 
 ## Multi-Device Synchronization
 

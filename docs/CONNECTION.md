@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Diary PWA connects to Nextcloud using WebDAV protocol. This document explains how to set up authentication and configure CORS headers.
+Deep End connects to Nextcloud using WebDAV protocol. This document explains how to set up authentication and configure CORS headers.
 
 ## Authentication Methods
 
@@ -27,13 +27,13 @@ App passwords provide secure authentication without exposing your main Nextcloud
 
 3. **Create App Password**:
    - Scroll to "Devices & sessions"
-   - In "App name" field, enter: `Diary PWA`
+   - In "App name" field, enter: `Deep End`
    - Click "Create new app password"
    - **Important**: Copy the generated password immediately
      - It looks like: `xxxxx-xxxxx-xxxxx-xxxxx-xxxxx`
      - You cannot view it again after closing
 
-4. **Use in Diary PWA**:
+4. **Use in Deep End**:
    - Select "🔑 App Password" method
    - Enter your Nextcloud URL
    - Enter your username
@@ -74,7 +74,7 @@ OAuth2 provides token-based authentication with better security for shared devic
 
 3. **Create OAuth2 Client**:
    - Click "Add client"
-   - **Name**: `Diary PWA`
+   - **Name**: `Deep End`
    - **Redirection URI**: Your app URL
      - For local: `http://localhost:8080`
      - For hosted: `https://diary.example.com`
@@ -87,7 +87,7 @@ OAuth2 provides token-based authentication with better security for shared devic
 
 ##### Part 2: App Configuration (User)
 
-1. **Open Diary PWA**
+1. **Open Deep End**
 
 2. **Select OAuth2 Method**:
    - Choose "🔐 OAuth2"
@@ -106,7 +106,7 @@ OAuth2 provides token-based authentication with better security for shared devic
 
 5. **Complete Setup**:
    - Copy the entire access token
-   - Return to Diary PWA
+   - Return to Deep End
    - Paste token in "Access Token" field
    - Click "Use This Token"
 
@@ -120,11 +120,11 @@ OAuth2 provides token-based authentication with better security for shared devic
 
 ## CORS Configuration
 
-CORS (Cross-Origin Resource Sharing) headers must be configured on your Nextcloud server to allow the Diary PWA to access the WebDAV API.
+CORS (Cross-Origin Resource Sharing) headers must be configured on your Nextcloud server to allow the Deep End to access the WebDAV API.
 
 ### Why CORS?
 
-When the Diary PWA is hosted on a different domain than Nextcloud (e.g., `http://localhost:8080` accessing `https://cloud.example.com`), browsers block the requests by default for security. CORS headers tell the browser it's safe.
+When the Deep End is hosted on a different domain than Nextcloud (e.g., `http://localhost:8080` accessing `https://cloud.example.com`), browsers block the requests by default for security. CORS headers tell the browser it's safe.
 
 ### Required Headers
 
@@ -168,7 +168,7 @@ Header set Access-Control-Allow-Origin "http://localhost:8080"
 Add to your Nextcloud server block:
 
 ```nginx
-# CORS headers for Diary PWA
+# CORS headers for Deep End
 add_header 'Access-Control-Allow-Origin' '*' always;
 add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, DELETE, PROPFIND, MKCOL, OPTIONS' always;
 add_header 'Access-Control-Allow-Headers' 'Authorization, Content-Type, Depth, OCS-APIRequest' always;
@@ -282,7 +282,7 @@ curl -X OPTIONS \
 
 #### Using Browser DevTools
 
-1. Open Diary PWA
+1. Open Deep End
 2. Try to connect
 3. Open DevTools (F12)
 4. Go to Network tab

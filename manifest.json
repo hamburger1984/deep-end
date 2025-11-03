@@ -1,22 +1,22 @@
 {
-    "name": "Diary PWA",
-    "short_name": "Diary",
-    "description": "A personal diary app that syncs with Nextcloud",
-    "start_url": "/",
-    "display": "standalone",
-    "background_color": "#f5f5f5",
-    "theme_color": "#2196f3",
-    "icons": [
-        {
-            "src": "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTkyIiBoZWlnaHQ9IjE5MiIgdmlld0JveD0iMCAwIDE5MiAxOTIiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIxOTIiIGhlaWdodD0iMTkyIiByeD0iMjQiIGZpbGw9IiMyMTk2RjMiLz4KPHN2ZyB4PSI0OCIgeT0iNDgiIHdpZHRoPSI5NiIgaGVpZ2h0PSI5NiIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJ3aGl0ZSI+CjxwYXRoIGQ9Ik0zIDEyYzAtNC45NyA0LjAzLTkgOS05czkgNC4wMyA5IDktNC4wMyA5LTkgOS05LTQuMDMtOS05em0xIDBoNnYySDR2LTJ6bTAgNGg4djJINHYtMnptMCA0aDZ2Mkg0di0yeiIvPgo8L3N2Zz4KPC9zdmc+",
-            "sizes": "192x192",
-            "type": "image/svg+xml"
-        },
-        {
-            "src": "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgdmlld0JveD0iMCAwIDUxMiA1MTIiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSI1MTIiIGhlaWdodD0iNTEyIiByeD0iNjQiIGZpbGw9IiMyMTk2RjMiLz4KPHN2ZyB4PSIxMjgiIHk9IjEyOCIgd2lkdGg9IjI1NiIgaGVpZ2h0PSIyNTYiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0id2hpdGUiPgo8cGF0aCBkPSJNMyAxMmMwLTQuOTcgNC4wMy05IDktOXM5IDQuMDMgOSA5LTQuMDMgOS05IDktOS00LjAzLTktOXptMSAwaDB2MmgtNnYtMnptMCA0aDh2Mkg0di0yem0wIDRoNnYySDF2LTJ6Ii8+Cjwvc3ZnPgo8L3N2Zz4=",
-            "sizes": "512x512",
-            "type": "image/svg+xml"
-        }
-    ],
-    "categories": ["productivity", "lifestyle"]
+  "name": "Deep End",
+  "short_name": "Deep End",
+  "description": "A personal journaling app for reflection and introspection",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f5f5f5",
+  "theme_color": "#2196f3",
+  "icons": [
+    {
+      "src": "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTkyIiBoZWlnaHQ9IjE5MiIgdmlld0JveD0iMCAwIDE5MiAxOTIiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIxOTIiIGhlaWdodD0iMTkyIiByeD0iMjQiIGZpbGw9IiMyMTk2RjMiLz4KPHN2ZyB4PSI0OCIgeT0iNDgiIHdpZHRoPSI5NiIgaGVpZ2h0PSI5NiIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJ3aGl0ZSI+CjxwYXRoIGQ9Ik0zIDEyYzAtNC45NyA0LjAzLTkgOS05czkgNC4wMyA5IDktNC4wMyA5LTkgOS05LTQuMDMtOS05em0xIDBoNnYySDR2LTJ6bTAgNGg4djJINHYtMnptMCA0aDZ2Mkg0di0yeiIvPgo8L3N2Zz4KPC9zdmc+",
+      "sizes": "192x192",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgdmlld0JveD0iMCAwIDUxMiA1MTIiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSI1MTIiIGhlaWdodD0iNTEyIiByeD0iNjQiIGZpbGw9IiMyMTk2RjMiLz4KPHN2ZyB4PSIxMjgiIHk9IjEyOCIgd2lkdGg9IjI1NiIgaGVpZ2h0PSIyNTYiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0id2hpdGUiPgo8cGF0aCBkPSJNMyAxMmMwLTQuOTcgNC4wMy05IDktOXM5IDQuMDMgOSA5LTQuMDMgOS05IDktOS00LjAzLTktOXptMSAwaDB2MmgtNnYtMnptMCA0aDh2Mkg0di0yem0wIDRoNnYySDF2LTJ6Ii8+Cjwvc3ZnPgo8L3N2Zz4=",
+      "sizes": "512x512",
+      "type": "image/svg+xml"
+    }
+  ],
+  "categories": ["productivity", "lifestyle"]
 }
