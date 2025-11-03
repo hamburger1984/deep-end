@@ -17,3 +17,5 @@ Thumbs.db
 # Temporary files
 .tmp/
 temp/
+
+app_passwords
