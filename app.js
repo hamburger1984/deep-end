@@ -268,6 +268,11 @@ class DiaryApp {
     this.todayBaselineContent = null; // Content when entry was loaded
     this.todayBaselineETag = null; // ETag when entry was loaded
     this.currentSessionText = null; // Text written in this session
+    this.currentEntryDate = null; // Date of the entry we're currently editing
+    this.lastEditTime = null; // Timestamp of last edit
+    this.sessionCommitTimer = null; // Timer for auto-committing inactive sessions
+    this.sessionCommitDelay = 30 * 60 * 1000; // 30 minutes in milliseconds
+    this.sessionCommitted = false; // Flag: was the current session committed?
 
     this.init();
   }
@@ -623,6 +628,13 @@ class DiaryApp {
 
     document.getElementById("today-date").textContent = todayStr;
 
+    // Set current entry date
+    this.currentEntryDate = this.formatDate(today);
+
+    // Reset session flags when loading entry
+    this.sessionCommitted = false;
+    this.lastEditTime = null;
+
     try {
       const monthFile = this.getMonthFileName(today);
       const fileData = await this.loadMonthFile(monthFile, true);
@@ -864,9 +876,64 @@ class DiaryApp {
       clearTimeout(this.autoSaveTimeout);
     }
 
+    // Update last edit time
+    this.lastEditTime = Date.now();
+
+    // Reset the session commit timer
+    if (this.sessionCommitTimer) {
+      clearTimeout(this.sessionCommitTimer);
+    }
+
+    // Set up timer to commit session after inactivity
+    this.sessionCommitTimer = setTimeout(async () => {
+      await this.commitCurrentSession();
+    }, this.sessionCommitDelay);
+
     this.autoSaveTimeout = setTimeout(async () => {
       await this.saveTodaysEntry();
     }, 1000);
+  }
+
+  async commitCurrentSession() {
+    // Commit means: next edit will append with timestamp
+    // We just need to update the baseline to include current content
+    const entryText = document.getElementById("entry-text").value.trim();
+
+    if (!entryText) return; // Nothing to commit
+
+    // Save current content first (without triggering another commit)
+    const tempSessionCommitted = this.sessionCommitted;
+    this.sessionCommitted = false; // Prevent recursion
+    await this.saveTodaysEntry();
+    this.sessionCommitted = tempSessionCommitted;
+
+    // Mark session as committed
+    this.sessionCommitted = true;
+
+    // Update baseline to mark this content as "committed"
+    const today = new Date();
+    const monthFile = this.getMonthFileName(today);
+
+    try {
+      const fileData = await this.loadMonthFile(monthFile, true);
+      const todayEntry = this.parseEntryFromContent(fileData.content, today);
+
+      if (todayEntry) {
+        this.todayBaselineContent = todayEntry.content;
+        this.todayBaselineETag = fileData.etag;
+
+        // Reload the display to show committed sections
+        const { committedSections, currentText } = this.parseContentSections(
+          todayEntry.content || "",
+        );
+        this.displayCommittedSections(committedSections);
+        document.getElementById("entry-text").value = currentText;
+      }
+
+      console.log("Session committed after inactivity");
+    } catch (error) {
+      console.error("Error committing session:", error);
+    }
   }
 
   async saveTodaysEntry() {
@@ -876,6 +943,40 @@ class DiaryApp {
     if (!entryText) return; // Don't save empty entries
 
     const today = new Date();
+    const todayStr = this.formatDate(today);
+
+    // Check if the date has changed (day boundary crossed)
+    if (this.currentEntryDate && this.currentEntryDate !== todayStr) {
+      // Date changed! Need to commit old session and start new entry
+      console.log(
+        "Day boundary crossed! Moving from",
+        this.currentEntryDate,
+        "to",
+        todayStr,
+      );
+
+      // First, append current content to old entry with timestamp
+      const oldDate = new Date(this.currentEntryDate);
+      const oldMonthFile = this.getMonthFileName(oldDate);
+
+      try {
+        const oldFileData = await this.loadMonthFile(oldMonthFile, true);
+        const oldUpdatedContent = this.appendEntryWithTimestamp(
+          oldFileData.content,
+          oldDate,
+          customTitle,
+          entryText,
+        );
+        await this.saveMonthFile(oldMonthFile, oldUpdatedContent);
+      } catch (error) {
+        console.error("Error saving to old date:", error);
+      }
+
+      // Now reload today's entry
+      await this.loadTodaysEntry();
+      return;
+    }
+
     const monthFile = this.getMonthFileName(today);
 
     try {
@@ -893,8 +994,14 @@ class DiaryApp {
         fileData.etag &&
         this.todayBaselineETag !== fileData.etag;
 
-      if (externalChange) {
-        // File was modified by another device - need to append with timestamp
+      if (externalChange || this.sessionCommitted) {
+        // File was modified by another device OR session was committed due to inactivity
+        // Need to append with timestamp
+
+        // Clear the session committed flag - we're starting a new session now
+        if (this.sessionCommitted) {
+          this.sessionCommitted = false;
+        }
         const updatedContent = this.appendEntryWithTimestamp(
           fileData.content,
           today,
@@ -921,7 +1028,10 @@ class DiaryApp {
           this.currentSessionText = currentText;
         }
 
-        this.showAutoSaveIndicator("Saved (merged with external changes)");
+        const saveMessage = externalChange
+          ? "Saved (merged with external changes)"
+          : "Saved (new session started)";
+        this.showAutoSaveIndicator(saveMessage);
       } else {
         // Normal save - just update the entry
         const updatedContent = this.updateEntryInContent(
