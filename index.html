@@ -14,6 +14,11 @@
       <div id="setup-screen" class="screen">
         <h1>📝 Diary Setup</h1>
 
+        <!-- Back button (shown only when already connected) -->
+        <button id="back-to-diary-btn" class="back-btn hidden">
+          ← Back to Diary
+        </button>
+
         <!-- Auth Method Selection -->
         <div class="auth-method-selector">
           <h3>Choose Authentication Method</h3>
@@ -159,6 +164,9 @@
                 maxlength="100"
               />
             </div>
+            <!-- Committed content (read-only) -->
+            <div id="committed-content" class="committed-sections hidden"></div>
+            <!-- Editable textarea for current session -->
             <textarea
               id="entry-text"
               placeholder="Start writing your diary entry..."

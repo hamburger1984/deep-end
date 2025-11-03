@@ -36,6 +36,20 @@ body {
   color: #2196f3;
 }
 
+.back-btn {
+  margin-bottom: 20px;
+  background: #f5f5f5;
+  color: #2196f3;
+  border: 1px solid #2196f3;
+  padding: 10px 20px;
+  width: auto;
+  font-size: 14px;
+}
+
+.back-btn:hover {
+  background: #e3f2fd;
+}
+
 /* Auth Method Selector */
 .auth-method-selector {
   margin-bottom: 30px;
@@ -66,6 +80,7 @@ body {
   transition: all 0.3s;
   font-size: 14px;
   line-height: 1.4;
+  color: #333;
 }
 
 .auth-option:hover {
@@ -237,6 +252,33 @@ main {
 
 #entry-text::placeholder {
   color: #999;
+}
+
+/* Committed content sections */
+.committed-sections {
+  margin-bottom: 20px;
+  padding-bottom: 20px;
+  border-bottom: 2px solid #e0e0e0;
+}
+
+.committed-section {
+  color: #555;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  margin-bottom: 15px;
+  padding: 10px;
+  background: #f9f9f9;
+  border-left: 3px solid #2196f3;
+  border-radius: 3px;
+}
+
+.committed-section .timestamp {
+  display: block;
+  font-style: italic;
+  color: #2196f3;
+  font-size: 13px;
+  margin-bottom: 8px;
+  font-weight: 500;
 }
 
 /* Entries Timeline */

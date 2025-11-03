@@ -100,22 +100,36 @@ class FolderBrowser {
     const responses = doc.querySelectorAll("response");
     const folders = [];
 
+    // Build the expected current directory path
+    const currentDirPath = this.currentPath
+      ? `/remote.php/dav/files/${this.config.username}/${this.currentPath}/`
+      : `/remote.php/dav/files/${this.config.username}/`;
+
     responses.forEach((response) => {
       const href = response.querySelector("href")?.textContent;
       const resourceType = response.querySelector("resourcetype");
       const isCollection = resourceType?.querySelector("collection") !== null;
 
       if (href && isCollection) {
-        const pathParts = decodeURIComponent(href).split("/");
-        const folderName =
-          pathParts[pathParts.length - 2] || pathParts[pathParts.length - 1];
+        const decodedHref = decodeURIComponent(href);
+        console.log("Processing:", decodedHref);
+        console.log("  Current dir:", currentDirPath);
 
-        // Skip the current directory entry
+        // Skip the current directory itself
         if (
-          folderName &&
-          !href.endsWith(`/${this.config.username}/`) &&
-          !href.endsWith(`/${this.currentPath}`)
+          decodedHref === currentDirPath ||
+          decodedHref === currentDirPath.slice(0, -1)
         ) {
+          console.log("  -> Skipping current directory");
+          return;
+        }
+
+        // Extract folder name from the href
+        const pathParts = decodedHref.split("/").filter((p) => p);
+        const folderName = pathParts[pathParts.length - 1];
+
+        if (folderName) {
+          console.log("  -> Adding folder:", folderName);
           folders.push({
             name: folderName,
             path: this.currentPath
@@ -126,6 +140,8 @@ class FolderBrowser {
         }
       }
     });
+
+    console.log("Total folders parsed:", folders.length);
 
     return folders.sort((a, b) => a.name.localeCompare(b.name));
   }
@@ -254,6 +270,11 @@ class DiaryApp {
     this.autoSaveTimeout = null;
     this.folderBrowser = null;
 
+    // Session-based commit tracking
+    this.todayBaselineContent = null; // Content when entry was loaded
+    this.todayBaselineETag = null; // ETag when entry was loaded
+    this.currentSessionText = null; // Text written in this session
+
     this.init();
   }
 
@@ -312,6 +333,13 @@ class DiaryApp {
       this.showSetupScreen();
     });
 
+    // Back to diary button
+    document
+      .getElementById("back-to-diary-btn")
+      .addEventListener("click", () => {
+        this.showMainScreen();
+      });
+
     // Auto-save for today's entry
     document.getElementById("entry-text").addEventListener("input", () => {
       this.autoSaveEntry();
@@ -365,10 +393,19 @@ class DiaryApp {
     const username = document.getElementById("username").value;
     const password = document.getElementById("app-password").value;
 
+    // If password field is empty and we have an existing config, keep the old password
+    const finalPassword =
+      password || (this.config && this.config.password) || "";
+
+    if (!finalPassword) {
+      alert("Please enter an app password");
+      return;
+    }
+
     const config = {
       url: url.endsWith("/") ? url.slice(0, -1) : url,
       username,
-      password,
+      password: finalPassword,
       authType: "basic",
     };
 
@@ -580,8 +617,35 @@ class DiaryApp {
     document.getElementById("folder-browser-screen").classList.add("hidden");
 
     if (this.config) {
+      // Show back button when already connected
+      document.getElementById("back-to-diary-btn").classList.remove("hidden");
+
       document.getElementById("nextcloud-url").value = this.config.url;
       document.getElementById("username").value = this.config.username;
+
+      // For security, don't populate password but indicate it's saved
+      if (this.config.password || this.config.accessToken) {
+        const passwordField = document.getElementById("app-password");
+        passwordField.value = "";
+        passwordField.placeholder =
+          "Password saved (leave empty to keep current)";
+        passwordField.required = false; // Make it optional when editing existing config
+      }
+
+      // Select the appropriate auth method
+      if (this.config.authType === "oauth2") {
+        this.selectAuthMethod("oauth2");
+      } else {
+        this.selectAuthMethod("app-password");
+      }
+    } else {
+      // Hide back button for initial setup
+      document.getElementById("back-to-diary-btn").classList.add("hidden");
+
+      // Reset password field to required for initial setup
+      const passwordField = document.getElementById("app-password");
+      passwordField.required = true;
+      passwordField.placeholder = "";
     }
   }
 
@@ -602,20 +666,52 @@ class DiaryApp {
 
     try {
       const monthFile = this.getMonthFileName(today);
-      const content = await this.loadMonthFile(monthFile);
-      const todayEntry = this.parseEntryFromContent(content, today);
+      const fileData = await this.loadMonthFile(monthFile, true);
+      const todayEntry = this.parseEntryFromContent(fileData.content, today);
 
       if (todayEntry) {
+        // Store baseline for this session
+        this.todayBaselineContent = todayEntry.content || "";
+        this.todayBaselineETag = fileData.etag;
+
+        // Parse content to separate committed sections from current session
+        const { committedSections, currentText } = this.parseContentSections(
+          todayEntry.content || "",
+        );
+        this.currentSessionText = currentText;
+
         document.getElementById("custom-title").value =
           todayEntry.customTitle || "";
-        document.getElementById("entry-text").value = todayEntry.content || "";
+
+        // Display committed sections (read-only)
+        this.displayCommittedSections(committedSections);
+
+        // Display current editable text
+        document.getElementById("entry-text").value = currentText;
         document.querySelector(".date-header").classList.remove("grayed");
       } else {
+        // No entry exists yet
+        this.todayBaselineContent = "";
+        this.todayBaselineETag = fileData.etag;
+        this.currentSessionText = "";
+
+        // Clear committed sections display
+        this.displayCommittedSections([]);
+        document.getElementById("entry-text").value = "";
+
         document.querySelector(".date-header").classList.add("grayed");
         document.getElementById("entry-text").focus();
       }
     } catch (error) {
       // Month file doesn't exist yet
+      this.todayBaselineContent = "";
+      this.todayBaselineETag = null;
+      this.currentSessionText = "";
+
+      // Clear committed sections display
+      this.displayCommittedSections([]);
+      document.getElementById("entry-text").value = "";
+
       document.querySelector(".date-header").classList.add("grayed");
       document.getElementById("entry-text").focus();
     }
@@ -664,7 +760,7 @@ class DiaryApp {
     }
   }
 
-  async loadMonthFile(filename) {
+  async loadMonthFile(filename, withMetadata = false) {
     const url = `${this.config.url}/remote.php/dav/files/${this.config.username}/${this.config.folder}/${filename}`;
 
     const response = await fetch(url, {
@@ -676,7 +772,17 @@ class DiaryApp {
       throw new Error(`File not found: ${filename}`);
     }
 
-    return await response.text();
+    const content = await response.text();
+
+    if (withMetadata) {
+      return {
+        content,
+        etag: response.headers.get("etag"),
+        lastModified: response.headers.get("last-modified"),
+      };
+    }
+
+    return content;
   }
 
   async saveMonthFile(filename, content) {
@@ -814,22 +920,68 @@ class DiaryApp {
     const monthFile = this.getMonthFileName(today);
 
     try {
-      let content = "";
+      let fileData;
       try {
-        content = await this.loadMonthFile(monthFile);
+        fileData = await this.loadMonthFile(monthFile, true);
       } catch (error) {
         // File doesn't exist, start with empty content
+        fileData = { content: "", etag: null };
       }
 
-      const updatedContent = this.updateEntryInContent(
-        content,
-        today,
-        customTitle,
-        entryText,
-      );
-      await this.saveMonthFile(monthFile, updatedContent);
+      // Check if file was modified externally (by another device)
+      const externalChange =
+        this.todayBaselineETag &&
+        fileData.etag &&
+        this.todayBaselineETag !== fileData.etag;
 
-      this.showAutoSaveIndicator();
+      if (externalChange) {
+        console.log(
+          "External change detected! ETag changed from",
+          this.todayBaselineETag,
+          "to",
+          fileData.etag,
+        );
+        // File was modified by another device - need to append with timestamp
+        const updatedContent = this.appendEntryWithTimestamp(
+          fileData.content,
+          today,
+          customTitle,
+          entryText,
+        );
+        await this.saveMonthFile(monthFile, updatedContent);
+
+        // Reload the entry to show the merged content with committed sections
+        const newFileData = await this.loadMonthFile(monthFile, true);
+        const todayEntry = this.parseEntryFromContent(
+          newFileData.content,
+          today,
+        );
+
+        if (todayEntry) {
+          const { committedSections, currentText } = this.parseContentSections(
+            todayEntry.content || "",
+          );
+          this.displayCommittedSections(committedSections);
+          document.getElementById("entry-text").value = currentText;
+          this.todayBaselineContent = todayEntry.content;
+          this.todayBaselineETag = newFileData.etag;
+          this.currentSessionText = currentText;
+        }
+
+        this.showAutoSaveIndicator("Saved (merged with external changes)");
+      } else {
+        // Normal save - just update the entry
+        const updatedContent = this.updateEntryInContent(
+          fileData.content,
+          today,
+          customTitle,
+          entryText,
+        );
+        await this.saveMonthFile(monthFile, updatedContent);
+
+        this.showAutoSaveIndicator();
+      }
+
       document.querySelector(".date-header").classList.remove("grayed");
     } catch (error) {
       console.error("Error saving entry:", error);
@@ -872,17 +1024,62 @@ class DiaryApp {
         }
       }
 
+      // Simply replace the content with the current text
+      lines[headerIndex] = newHeader;
+      lines.splice(contentStart, contentEnd - contentStart, entryText);
+    } else {
+      // Add new entry at the top
+      const newEntry = [newHeader, entryText, ""];
+      lines.unshift(...newEntry);
+    }
+
+    return lines.join("\n");
+  }
+
+  appendEntryWithTimestamp(content, date, customTitle, entryText) {
+    const dateStr = this.formatDate(date);
+    const lines = content.split("\n");
+    const headerPattern = `## ${dateStr}`;
+
+    // Find existing entry
+    let headerIndex = -1;
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].startsWith(headerPattern)) {
+        headerIndex = i;
+        break;
+      }
+    }
+
+    const newHeader = customTitle
+      ? `## ${dateStr} - ${customTitle}`
+      : `## ${dateStr}`;
+    const currentTime = new Date().toLocaleTimeString("en-GB", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+    if (headerIndex >= 0) {
+      // Entry exists - append new content with timestamp
+      let contentStart = headerIndex + 1;
+      let contentEnd = lines.length;
+
+      // Find the end of this entry (next header or end of file)
+      for (let i = contentStart; i < lines.length; i++) {
+        if (lines[i].startsWith("## ")) {
+          contentEnd = i;
+          break;
+        }
+      }
+
       let existingContent = lines
         .slice(contentStart, contentEnd)
         .join("\n")
         .trim();
 
-      // If there's existing content, append with timestamp
-      let newContent = entryText;
-      if (existingContent && existingContent !== entryText) {
-        newContent =
-          existingContent + "\n\n*" + currentTime + "*\n" + entryText;
-      }
+      // Append new content with timestamp
+      const newContent = existingContent
+        ? `${existingContent}\n\n*${currentTime}*\n${entryText}`
+        : entryText;
 
       lines[headerIndex] = newHeader;
       lines.splice(contentStart, contentEnd - contentStart, newContent);
@@ -895,19 +1092,100 @@ class DiaryApp {
     return lines.join("\n");
   }
 
-  showAutoSaveIndicator() {
+  showAutoSaveIndicator(message = "Saved") {
     let indicator = document.querySelector(".auto-save");
     if (!indicator) {
       indicator = document.createElement("div");
       indicator.className = "auto-save";
-      indicator.textContent = "Saved";
       document.body.appendChild(indicator);
     }
 
+    indicator.textContent = message;
     indicator.classList.add("show");
     setTimeout(() => {
       indicator.classList.remove("show");
     }, 2000);
+  }
+
+  parseContentSections(content) {
+    // Split content by timestamp pattern: *HH:MM*
+    const timestampPattern = /\n\*(\d{2}:\d{2})\*\n/g;
+    const sections = [];
+    let lastIndex = 0;
+    let match;
+
+    while ((match = timestampPattern.exec(content)) !== null) {
+      const sectionText = content.substring(lastIndex, match.index).trim();
+      if (sectionText) {
+        sections.push({
+          timestamp:
+            lastIndex === 0 ? null : sections[sections.length - 1].timestamp,
+          text: sectionText,
+        });
+      }
+      lastIndex = match.index + match[0].length;
+      sections.push({
+        timestamp: match[1],
+        text: null,
+      });
+    }
+
+    // Add remaining content (current session text)
+    const currentText = content.substring(lastIndex).trim();
+
+    // Merge timestamps with their following text
+    const committedSections = [];
+    for (let i = 0; i < sections.length; i++) {
+      if (
+        sections[i].timestamp &&
+        i + 1 < sections.length &&
+        sections[i + 1].text
+      ) {
+        committedSections.push({
+          timestamp: sections[i].timestamp,
+          text: sections[i + 1].text,
+        });
+        i++; // Skip next item as we've merged it
+      } else if (sections[i].text && !sections[i].timestamp) {
+        // First section without timestamp
+        committedSections.push({
+          timestamp: null,
+          text: sections[i].text,
+        });
+      }
+    }
+
+    return { committedSections, currentText };
+  }
+
+  displayCommittedSections(sections) {
+    const container = document.getElementById("committed-content");
+
+    if (sections.length === 0) {
+      container.classList.add("hidden");
+      container.innerHTML = "";
+      return;
+    }
+
+    container.classList.remove("hidden");
+    container.innerHTML = "";
+
+    sections.forEach((section) => {
+      const sectionDiv = document.createElement("div");
+      sectionDiv.className = "committed-section";
+
+      if (section.timestamp) {
+        const timestamp = document.createElement("span");
+        timestamp.className = "timestamp";
+        timestamp.textContent = section.timestamp;
+        sectionDiv.appendChild(timestamp);
+      }
+
+      const textNode = document.createTextNode(section.text);
+      sectionDiv.appendChild(textNode);
+
+      container.appendChild(sectionDiv);
+    });
   }
 
   getMonthFileName(date) {
