@@ -112,15 +112,12 @@ class FolderBrowser {
 
       if (href && isCollection) {
         const decodedHref = decodeURIComponent(href);
-        console.log("Processing:", decodedHref);
-        console.log("  Current dir:", currentDirPath);
 
         // Skip the current directory itself
         if (
           decodedHref === currentDirPath ||
           decodedHref === currentDirPath.slice(0, -1)
         ) {
-          console.log("  -> Skipping current directory");
           return;
         }
 
@@ -129,7 +126,6 @@ class FolderBrowser {
         const folderName = pathParts[pathParts.length - 1];
 
         if (folderName) {
-          console.log("  -> Adding folder:", folderName);
           folders.push({
             name: folderName,
             path: this.currentPath
@@ -140,8 +136,6 @@ class FolderBrowser {
         }
       }
     });
-
-    console.log("Total folders parsed:", folders.length);
 
     return folders.sort((a, b) => a.name.localeCompare(b.name));
   }
@@ -526,41 +520,6 @@ class DiaryApp {
     }
   }
 
-  async handleSetup() {
-    const url = document.getElementById("nextcloud-url").value;
-    const username = document.getElementById("username").value;
-    const password = document.getElementById("app-password").value;
-
-    const config = {
-      url: url.endsWith("/") ? url.slice(0, -1) : url,
-      username,
-      password,
-    };
-
-    try {
-      // Test connection
-      await this.testConnection(config);
-
-      // Show folder browser
-      this.folderBrowser = new FolderBrowser(config);
-      await this.folderBrowser.show();
-
-      // Set up folder selection handler (remove existing listener first)
-      const selectBtn = document.getElementById("select-current-btn");
-      selectBtn.replaceWith(selectBtn.cloneNode(true));
-
-      document
-        .getElementById("select-current-btn")
-        .addEventListener("click", async () => {
-          const finalConfig = this.folderBrowser.selectCurrentFolder();
-          this.saveConfig(finalConfig);
-          await this.showMainScreen();
-        });
-    } catch (error) {
-      alert("Connection failed: " + error.message);
-    }
-  }
-
   async testConnection(config) {
     const headers = this.getAuthHeaders(config);
     let testUrl;
@@ -935,12 +894,6 @@ class DiaryApp {
         this.todayBaselineETag !== fileData.etag;
 
       if (externalChange) {
-        console.log(
-          "External change detected! ETag changed from",
-          this.todayBaselineETag,
-          "to",
-          fileData.etag,
-        );
         // File was modified by another device - need to append with timestamp
         const updatedContent = this.appendEntryWithTimestamp(
           fileData.content,
