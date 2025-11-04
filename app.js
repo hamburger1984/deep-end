@@ -7,16 +7,10 @@ class FolderBrowser {
   }
 
   getAuthHeaders() {
-    if (this.config.authType === "oauth2" && this.config.accessToken) {
-      return {
-        Authorization: `Bearer ${this.config.accessToken}`,
-      };
-    } else {
-      return {
-        Authorization:
-          "Basic " + btoa(`${this.config.username}:${this.config.password}`),
-      };
-    }
+    return {
+      Authorization:
+        "Basic " + btoa(`${this.config.username}:${this.config.password}`),
+    };
   }
 
   setupEventListeners() {
@@ -281,7 +275,9 @@ class DiaryApp {
     if (this.config) {
       this.showMainScreen();
     } else {
-      this.showSetupScreen();
+      // Start with localStorage mode by default (no setup required)
+      this.config = { storageType: "local" };
+      this.showMainScreen();
     }
 
     this.setupEventListeners();
@@ -299,33 +295,13 @@ class DiaryApp {
   }
 
   setupEventListeners() {
-    // Auth method selection
-    document
-      .getElementById("select-app-password")
-      .addEventListener("click", () => {
-        this.selectAuthMethod("app-password");
-      });
-
-    document.getElementById("select-oauth2").addEventListener("click", () => {
-      this.selectAuthMethod("oauth2");
-    });
-
-    // Auth forms
+    // Auth form
     document
       .getElementById("app-password-form")
       .addEventListener("submit", (e) => {
         e.preventDefault();
         this.handleAppPasswordAuth();
       });
-
-    document.getElementById("oauth2-form").addEventListener("submit", (e) => {
-      e.preventDefault();
-      this.handleOAuth2Auth();
-    });
-
-    document.getElementById("use-token-btn").addEventListener("click", () => {
-      this.handleTokenAuth();
-    });
 
     // Settings button
     document.getElementById("settings-btn").addEventListener("click", () => {
@@ -337,6 +313,13 @@ class DiaryApp {
       .getElementById("back-to-diary-btn")
       .addEventListener("click", () => {
         this.showMainScreen();
+      });
+
+    // Connect to Nextcloud button (from localStorage mode)
+    document
+      .getElementById("connect-nextcloud-btn")
+      .addEventListener("click", () => {
+        this.showNextcloudSetup();
       });
 
     // Auto-save for today's entry
@@ -366,25 +349,6 @@ class DiaryApp {
         ticking = true;
       }
     });
-  }
-
-  selectAuthMethod(method) {
-    // Update button states
-    document
-      .getElementById("select-app-password")
-      .classList.toggle("active", method === "app-password");
-    document
-      .getElementById("select-oauth2")
-      .classList.toggle("active", method === "oauth2");
-
-    // Show/hide forms
-    document
-      .getElementById("app-password-form")
-      .classList.toggle("hidden", method !== "app-password");
-    document
-      .getElementById("oauth2-form")
-      .classList.toggle("hidden", method !== "oauth2");
-    document.getElementById("oauth2-token-form").classList.add("hidden");
   }
 
   async handleAppPasswordAuth() {
@@ -425,6 +389,36 @@ class DiaryApp {
         .addEventListener("click", async () => {
           const finalConfig = this.folderBrowser.selectCurrentFolder();
           finalConfig.authType = "basic";
+
+          // Check if we're migrating from localStorage
+          const wasLocalStorage =
+            this.config && this.config.storageType === "local";
+
+          if (wasLocalStorage) {
+            // Migrate localStorage files to Nextcloud
+            const result = await this.migrateToNextcloud(finalConfig);
+
+            if (result.success) {
+              // Migration successful - ask if user wants to clear localStorage
+              const shouldClear = confirm(
+                `Successfully migrated ${result.migrated} file(s) to Nextcloud!\n\nDo you want to clear the local copies from browser storage?\n\n(Recommended: Yes - Your files are now safely stored in Nextcloud)`,
+              );
+
+              if (shouldClear) {
+                this.clearLocalStorageFiles();
+                alert(
+                  "Local files cleared. Your data is now synced with Nextcloud.",
+                );
+              } else {
+                alert("Local files kept as backup.");
+              }
+            } else if (result.migrated > 0) {
+              alert(
+                `Partially migrated: ${result.migrated} file(s) succeeded, ${result.failed} file(s) failed.\n\nLocal files kept for safety.`,
+              );
+            }
+          }
+
           this.saveConfig(finalConfig);
           await this.showMainScreen();
         });
@@ -433,114 +427,15 @@ class DiaryApp {
     }
   }
 
-  async handleOAuth2Auth() {
-    const url = document.getElementById("oauth-nextcloud-url").value;
-    const clientId = document.getElementById("client-id").value;
-    const clientSecret = document.getElementById("client-secret").value;
-
-    const config = {
-      url: url.endsWith("/") ? url.slice(0, -1) : url,
-      clientId,
-      clientSecret,
-      authType: "oauth2",
-    };
-
-    try {
-      // Generate OAuth2 authorization URL
-      const authUrl = this.generateOAuth2Url(config);
-
-      // Open OAuth2 authorization in new window
-      const authWindow = window.open(authUrl, "oauth2", "width=600,height=700");
-
-      // Show token input form
-      document.getElementById("oauth2-form").classList.add("hidden");
-      document.getElementById("oauth2-token-form").classList.remove("hidden");
-
-      // Store config for later use
-      this.pendingOAuth2Config = config;
-
-      alert(
-        "Please authorize the application in the opened window, then copy and paste the access token below.",
-      );
-    } catch (error) {
-      alert("OAuth2 setup failed: " + error.message);
-    }
-  }
-
-  generateOAuth2Url(config) {
-    const redirectUri = window.location.origin + window.location.pathname;
-    const state = Math.random().toString(36).substring(7);
-
-    const params = new URLSearchParams({
-      response_type: "code",
-      client_id: config.clientId,
-      redirect_uri: redirectUri,
-      state: state,
-      scope: "read write",
-    });
-
-    // Store state for validation
-    sessionStorage.setItem("oauth2_state", state);
-
-    return `${config.url}/apps/oauth2/authorize?${params.toString()}`;
-  }
-
-  async handleTokenAuth() {
-    const token = document.getElementById("access-token").value.trim();
-
-    if (!token) {
-      alert("Please enter an access token");
-      return;
-    }
-
-    const config = {
-      ...this.pendingOAuth2Config,
-      accessToken: token,
-      authType: "oauth2",
-    };
-
-    try {
-      // Test connection with token
-      await this.testConnectionWithToken(config);
-
-      // Show folder browser
-      this.folderBrowser = new FolderBrowser(config);
-      await this.folderBrowser.show();
-
-      // Set up folder selection handler
-      const selectBtn = document.getElementById("select-current-btn");
-      selectBtn.replaceWith(selectBtn.cloneNode(true));
-
-      document
-        .getElementById("select-current-btn")
-        .addEventListener("click", async () => {
-          const finalConfig = this.folderBrowser.selectCurrentFolder();
-          finalConfig.authType = "oauth2";
-          finalConfig.accessToken = token;
-          this.saveConfig(finalConfig);
-          await this.showMainScreen();
-        });
-    } catch (error) {
-      alert("Token authentication failed: " + error.message);
-    }
-  }
-
   async testConnection(config) {
     const headers = this.getAuthHeaders(config);
-    let testUrl;
-
-    if (config.authType === "oauth2") {
-      // For OAuth2, test with a simpler endpoint first
-      testUrl = `${config.url}/ocs/v2.php/cloud/user`;
-    } else {
-      testUrl = `${config.url}/remote.php/dav/files/${config.username}/`;
-    }
+    const testUrl = `${config.url}/remote.php/dav/files/${config.username}/`;
 
     const response = await fetch(testUrl, {
-      method: config.authType === "oauth2" ? "GET" : "PROPFIND",
+      method: "PROPFIND",
       headers: {
         ...headers,
-        ...(config.authType !== "oauth2" && { Depth: "0" }),
+        Depth: "0",
       },
     });
 
@@ -549,30 +444,115 @@ class DiaryApp {
     }
   }
 
-  async testConnectionWithToken(config) {
-    const response = await fetch(`${config.url}/ocs/v2.php/cloud/user`, {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${config.accessToken}`,
-        "OCS-APIRequest": "true",
-      },
-    });
+  getAuthHeaders(config) {
+    return {
+      Authorization: "Basic " + btoa(`${config.username}:${config.password}`),
+    };
+  }
 
-    if (!response.ok) {
-      throw new Error("Token authentication failed");
+  showNextcloudSetup() {
+    // Show the Nextcloud auth form
+    document.getElementById("local-storage-info").classList.add("hidden");
+    document.getElementById("app-password-form").classList.remove("hidden");
+
+    // Clear any previous values
+    document.getElementById("nextcloud-url").value = "";
+    document.getElementById("username").value = "";
+    document.getElementById("app-password").value = "";
+    document.getElementById("app-password").required = true;
+    document.getElementById("app-password").placeholder = "";
+  }
+
+  showMigrationProgress(current, total) {
+    let progressDiv = document.getElementById("migration-progress");
+
+    if (!progressDiv) {
+      progressDiv = document.createElement("div");
+      progressDiv.id = "migration-progress";
+      progressDiv.className = "migration-progress";
+      document.body.appendChild(progressDiv);
+    }
+
+    progressDiv.innerHTML = `
+      <div class="migration-content">
+        <h3>📤 Migrating to Nextcloud</h3>
+        <p>Uploading file ${current} of ${total}...</p>
+        <div class="progress-bar">
+          <div class="progress-fill" style="width: ${(current / total) * 100}%"></div>
+        </div>
+      </div>
+    `;
+    progressDiv.classList.remove("hidden");
+  }
+
+  hideMigrationProgress() {
+    const progressDiv = document.getElementById("migration-progress");
+    if (progressDiv) {
+      progressDiv.classList.add("hidden");
     }
   }
 
-  getAuthHeaders(config) {
-    if (config.authType === "oauth2" && config.accessToken) {
-      return {
-        Authorization: `Bearer ${config.accessToken}`,
-      };
-    } else {
-      return {
-        Authorization: "Basic " + btoa(`${config.username}:${config.password}`),
-      };
+  async migrateToNextcloud(newConfig) {
+    // Get all localStorage files
+    const filesToMigrate = [];
+
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key.startsWith("deepend:file:")) {
+        const filename = key.replace("deepend:file:", "");
+        const content = localStorage.getItem(key);
+        filesToMigrate.push({ filename, content });
+      }
     }
+
+    if (filesToMigrate.length === 0) {
+      // No files to migrate
+      return { success: true, migrated: 0, failed: 0 };
+    }
+
+    let migrated = 0;
+    let failed = 0;
+
+    // Temporarily set config to use Nextcloud
+    const oldConfig = this.config;
+    this.config = newConfig;
+
+    for (const file of filesToMigrate) {
+      try {
+        // Show progress
+        this.showMigrationProgress(migrated + 1, filesToMigrate.length);
+
+        // Use the Nextcloud save logic
+        await this.saveMonthFile(file.filename, file.content);
+        migrated++;
+        console.log(`Migrated: ${file.filename}`);
+      } catch (error) {
+        console.error(`Failed to migrate ${file.filename}:`, error);
+        failed++;
+      }
+    }
+
+    // Hide progress indicator
+    this.hideMigrationProgress();
+
+    // Keep the new config
+    this.config = newConfig;
+
+    return { success: failed === 0, migrated, failed };
+  }
+
+  clearLocalStorageFiles() {
+    const keysToRemove = [];
+
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key.startsWith("deepend:file:") || key.startsWith("deepend:meta:")) {
+        keysToRemove.push(key);
+      }
+    }
+
+    keysToRemove.forEach((key) => localStorage.removeItem(key));
+    console.log(`Cleared ${keysToRemove.length} localStorage entries`);
   }
 
   showSetupScreen() {
@@ -580,15 +560,31 @@ class DiaryApp {
     document.getElementById("main-screen").classList.add("hidden");
     document.getElementById("folder-browser-screen").classList.add("hidden");
 
-    if (this.config) {
-      // Show back button when already connected
+    if (this.config && this.config.storageType === "local") {
+      // localStorage mode - show info and connect option
       document.getElementById("back-to-diary-btn").classList.remove("hidden");
+      document.getElementById("local-storage-info").classList.remove("hidden");
+
+      // Hide auth form
+      document.getElementById("app-password-form").classList.add("hidden");
+
+      // Show storage mode indicator
+      document
+        .getElementById("storage-mode-indicator")
+        .classList.remove("hidden");
+      document.getElementById("storage-mode-text").textContent =
+        "💾 Storage: Local (Browser Only)";
+    } else if (this.config) {
+      // Nextcloud mode - show existing config
+      document.getElementById("back-to-diary-btn").classList.remove("hidden");
+      document.getElementById("local-storage-info").classList.add("hidden");
+      document.getElementById("app-password-form").classList.remove("hidden");
 
       document.getElementById("nextcloud-url").value = this.config.url;
       document.getElementById("username").value = this.config.username;
 
       // For security, don't populate password but indicate it's saved
-      if (this.config.password || this.config.accessToken) {
+      if (this.config.password) {
         const passwordField = document.getElementById("app-password");
         passwordField.value = "";
         passwordField.placeholder =
@@ -596,15 +592,17 @@ class DiaryApp {
         passwordField.required = false; // Make it optional when editing existing config
       }
 
-      // Select the appropriate auth method
-      if (this.config.authType === "oauth2") {
-        this.selectAuthMethod("oauth2");
-      } else {
-        this.selectAuthMethod("app-password");
-      }
+      // Show storage mode indicator
+      document
+        .getElementById("storage-mode-indicator")
+        .classList.remove("hidden");
+      document.getElementById("storage-mode-text").textContent =
+        "☁️ Storage: Nextcloud Sync";
     } else {
-      // Hide back button for initial setup
+      // Initial setup - should not happen anymore since we default to localStorage
       document.getElementById("back-to-diary-btn").classList.add("hidden");
+      document.getElementById("local-storage-info").classList.add("hidden");
+      document.getElementById("app-password-form").classList.remove("hidden");
 
       // Reset password field to required for initial setup
       const passwordField = document.getElementById("app-password");
@@ -732,6 +730,30 @@ class DiaryApp {
   }
 
   async loadMonthFile(filename, withMetadata = false) {
+    // Check if using localStorage mode
+    if (!this.config || this.config.storageType === "local") {
+      // localStorage mode
+      const content = localStorage.getItem(`deepend:file:${filename}`);
+
+      if (!content) {
+        throw new Error(`File not found: ${filename}`);
+      }
+
+      if (withMetadata) {
+        // No ETag in localStorage mode
+        return {
+          content,
+          etag: null,
+          lastModified: localStorage.getItem(
+            `deepend:meta:${filename}:lastModified`,
+          ),
+        };
+      }
+
+      return content;
+    }
+
+    // Nextcloud mode
     const url = `${this.config.url}/remote.php/dav/files/${this.config.username}/${this.config.folder}/${filename}`;
 
     const response = await fetch(url, {
@@ -757,6 +779,18 @@ class DiaryApp {
   }
 
   async saveMonthFile(filename, content) {
+    // Check if using localStorage mode
+    if (!this.config || this.config.storageType === "local") {
+      // localStorage mode
+      localStorage.setItem(`deepend:file:${filename}`, content);
+      localStorage.setItem(
+        `deepend:meta:${filename}:lastModified`,
+        new Date().toISOString(),
+      );
+      return;
+    }
+
+    // Nextcloud mode
     const url = `${this.config.url}/remote.php/dav/files/${this.config.username}/${this.config.folder}/${filename}`;
 
     const response = await fetch(url, {
