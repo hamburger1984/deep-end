@@ -400,9 +400,15 @@ class DiaryApp {
 
             if (result.success) {
               // Migration successful - ask if user wants to clear localStorage
-              const shouldClear = confirm(
-                `Successfully migrated ${result.migrated} file(s) to Nextcloud!\n\nDo you want to clear the local copies from browser storage?\n\n(Recommended: Yes - Your files are now safely stored in Nextcloud)`,
-              );
+              let message = `Successfully migrated ${result.migrated} file(s) to Nextcloud!`;
+
+              if (result.merged > 0) {
+                message += `\n\n${result.merged} file(s) were merged with existing Nextcloud entries.`;
+              }
+
+              message += `\n\nDo you want to clear the local copies from browser storage?\n\n(Recommended: Yes - Your files are now safely stored in Nextcloud)`;
+
+              const shouldClear = confirm(message);
 
               if (shouldClear) {
                 this.clearLocalStorageFiles();
@@ -492,6 +498,121 @@ class DiaryApp {
     }
   }
 
+  mergeMonthFileContents(localContent, remoteContent) {
+    // Parse all entries from both sources
+    const localEntries = new Map(); // date -> entry object
+    const remoteEntries = new Map();
+
+    // Parse local entries
+    const localLines = localContent.split("\n");
+    this.parseEntriesIntoMap(localLines, localEntries);
+
+    // Parse remote entries
+    const remoteLines = remoteContent.split("\n");
+    this.parseEntriesIntoMap(remoteLines, remoteEntries);
+
+    // Merge: combine entries, preferring local if there's a conflict
+    const mergedEntries = new Map();
+
+    // Add all remote entries first
+    for (const [date, entry] of remoteEntries) {
+      mergedEntries.set(date, entry);
+    }
+
+    // Add/overwrite with local entries
+    for (const [date, entry] of localEntries) {
+      if (mergedEntries.has(date)) {
+        // Entry exists in both - merge the content
+        const remoteEntry = mergedEntries.get(date);
+        const mergedContent = this.mergeEntryContent(
+          remoteEntry.content,
+          entry.content,
+        );
+        mergedEntries.set(date, {
+          date: entry.date,
+          customTitle: entry.customTitle || remoteEntry.customTitle,
+          content: mergedContent,
+        });
+      } else {
+        // New entry from local
+        mergedEntries.set(date, entry);
+      }
+    }
+
+    // Convert back to file format, sorted by date (newest first)
+    const sortedDates = Array.from(mergedEntries.keys()).sort().reverse();
+    const lines = [];
+
+    for (const date of sortedDates) {
+      const entry = mergedEntries.get(date);
+      const header = entry.customTitle
+        ? `## ${date} - ${entry.customTitle}`
+        : `## ${date}`;
+
+      lines.push(header);
+      lines.push(entry.content);
+      lines.push(""); // Empty line between entries
+    }
+
+    return lines.join("\n");
+  }
+
+  parseEntriesIntoMap(lines, entriesMap) {
+    let currentDate = null;
+    let currentTitle = "";
+    let currentContent = [];
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+
+      if (line.startsWith("## ")) {
+        // Save previous entry if exists
+        if (currentDate) {
+          entriesMap.set(currentDate, {
+            date: currentDate,
+            customTitle: currentTitle,
+            content: currentContent.join("\n").trim(),
+          });
+        }
+
+        // Parse new entry header
+        const match = line.match(/^## (\d{4}-\d{2}-\d{2})(.*)$/);
+        if (match) {
+          currentDate = match[1];
+          currentTitle = match[2].replace(/^\s*-\s*/, "").trim();
+          currentContent = [];
+        }
+      } else if (currentDate) {
+        // Add to current entry content
+        currentContent.push(line);
+      }
+    }
+
+    // Save last entry
+    if (currentDate) {
+      entriesMap.set(currentDate, {
+        date: currentDate,
+        customTitle: currentTitle,
+        content: currentContent.join("\n").trim(),
+      });
+    }
+  }
+
+  mergeEntryContent(remoteContent, localContent) {
+    // If contents are identical, just return one
+    if (remoteContent.trim() === localContent.trim()) {
+      return localContent;
+    }
+
+    // Both have content but differ - append local to remote with a merge marker
+    const timestamp = new Date().toLocaleTimeString("en-GB", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+    return `${remoteContent.trim()}\n\n*${timestamp} (merged from local)*\n${localContent.trim()}`;
+  }
+
   async migrateToNextcloud(newConfig) {
     // Get all localStorage files
     const filesToMigrate = [];
@@ -512,6 +633,7 @@ class DiaryApp {
 
     let migrated = 0;
     let failed = 0;
+    let merged = 0;
 
     // Temporarily set config to use Nextcloud
     const oldConfig = this.config;
@@ -522,10 +644,33 @@ class DiaryApp {
         // Show progress
         this.showMigrationProgress(migrated + 1, filesToMigrate.length);
 
-        // Use the Nextcloud save logic
-        await this.saveMonthFile(file.filename, file.content);
+        // Check if file already exists on Nextcloud
+        let remoteContent = null;
+        try {
+          remoteContent = await this.loadMonthFile(file.filename);
+        } catch (error) {
+          // File doesn't exist on remote, that's okay
+          remoteContent = null;
+        }
+
+        let contentToSave;
+        if (remoteContent) {
+          // Merge local and remote content
+          contentToSave = this.mergeMonthFileContents(
+            file.content,
+            remoteContent,
+          );
+          merged++;
+          console.log(`Merged: ${file.filename}`);
+        } else {
+          // No remote file, just use local content
+          contentToSave = file.content;
+          console.log(`Migrated: ${file.filename}`);
+        }
+
+        // Save the merged/local content
+        await this.saveMonthFile(file.filename, contentToSave);
         migrated++;
-        console.log(`Migrated: ${file.filename}`);
       } catch (error) {
         console.error(`Failed to migrate ${file.filename}:`, error);
         failed++;
@@ -538,7 +683,7 @@ class DiaryApp {
     // Keep the new config
     this.config = newConfig;
 
-    return { success: failed === 0, migrated, failed };
+    return { success: failed === 0, migrated, failed, merged };
   }
 
   clearLocalStorageFiles() {
