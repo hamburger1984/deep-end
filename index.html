@@ -134,10 +134,16 @@
             <!-- Committed content (read-only) -->
             <div id="committed-content" class="committed-sections hidden"></div>
             <!-- Editable textarea for current session -->
-            <textarea
-              id="entry-text"
-              placeholder="Dive in, start writing..."
-            ></textarea>
+            <div class="textarea-wrapper">
+              <textarea
+                id="entry-text"
+                placeholder="Dive in, start writing..."
+              ></textarea>
+              <div id="session-timer" class="session-timer hidden">
+                <span class="timer-icon">⏱</span>
+                <span id="timer-text">30:00</span>
+              </div>
+            </div>
           </div>
 
           <!-- Entries Timeline -->

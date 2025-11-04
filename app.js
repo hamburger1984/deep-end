@@ -267,6 +267,7 @@ class DiaryApp {
     this.sessionCommitTimer = null; // Timer for auto-committing inactive sessions
     this.sessionCommitDelay = 30 * 60 * 1000; // 30 minutes in milliseconds
     this.sessionCommitted = false; // Flag: was the current session committed?
+    this.timerDisplayInterval = null; // Interval for updating timer display
 
     this.init();
   }
@@ -777,6 +778,7 @@ class DiaryApp {
     // Reset session flags when loading entry
     this.sessionCommitted = false;
     this.lastEditTime = null;
+    this.hideTimer();
 
     try {
       const monthFile = this.getMonthFileName(today);
@@ -1050,6 +1052,56 @@ class DiaryApp {
       .replace(/\*(\d{2}:\d{2})\*/g, '<span class="entry-time">$1</span>');
   }
 
+  updateTimerDisplay() {
+    if (!this.lastEditTime) {
+      this.hideTimer();
+      return;
+    }
+
+    const elapsed = Date.now() - this.lastEditTime;
+    const remaining = Math.max(0, this.sessionCommitDelay - elapsed);
+
+    if (remaining === 0) {
+      this.hideTimer();
+      return;
+    }
+
+    const minutes = Math.floor(remaining / 60000);
+    const seconds = Math.floor((remaining % 60000) / 1000);
+    const timeString = `${minutes}:${seconds.toString().padStart(2, "0")}`;
+
+    const timerText = document.getElementById("timer-text");
+    if (timerText) {
+      timerText.textContent = timeString;
+    }
+  }
+
+  showTimer() {
+    const timer = document.getElementById("session-timer");
+    if (timer) {
+      timer.classList.remove("hidden");
+    }
+
+    // Update display every second
+    if (!this.timerDisplayInterval) {
+      this.timerDisplayInterval = setInterval(() => {
+        this.updateTimerDisplay();
+      }, 1000);
+    }
+  }
+
+  hideTimer() {
+    const timer = document.getElementById("session-timer");
+    if (timer) {
+      timer.classList.add("hidden");
+    }
+
+    if (this.timerDisplayInterval) {
+      clearInterval(this.timerDisplayInterval);
+      this.timerDisplayInterval = null;
+    }
+  }
+
   async autoSaveEntry() {
     if (this.autoSaveTimeout) {
       clearTimeout(this.autoSaveTimeout);
@@ -1057,6 +1109,10 @@ class DiaryApp {
 
     // Update last edit time
     this.lastEditTime = Date.now();
+
+    // Show and update timer
+    this.showTimer();
+    this.updateTimerDisplay();
 
     // Reset the session commit timer
     if (this.sessionCommitTimer) {
@@ -1079,6 +1135,9 @@ class DiaryApp {
     const entryText = document.getElementById("entry-text").value.trim();
 
     if (!entryText) return; // Nothing to commit
+
+    // Hide timer since session is being committed
+    this.hideTimer();
 
     // Save current content first (without triggering another commit)
     const tempSessionCommitted = this.sessionCommitted;

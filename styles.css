@@ -226,6 +226,18 @@ main {
   border-bottom-color: #2196f3;
 }
 
+.textarea-wrapper {
+  position: relative;
+  border-left: 3px solid transparent;
+  padding-left: 12px;
+  margin-left: -12px;
+  transition: border-color 0.3s ease;
+}
+
+.textarea-wrapper:focus-within {
+  border-left-color: #2196f3;
+}
+
 #entry-text {
   width: 100%;
   min-height: 120px;
@@ -243,6 +255,38 @@ main {
 
 #entry-text::placeholder {
   color: #999;
+}
+
+/* Session Timer */
+.session-timer {
+  position: absolute;
+  bottom: 5px;
+  right: 5px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: #999;
+  background: rgba(255, 255, 255, 0.9);
+  padding: 3px 8px;
+  border-radius: 10px;
+  opacity: 0.6;
+  transition: opacity 0.3s;
+  pointer-events: none;
+}
+
+.session-timer:hover {
+  opacity: 1;
+}
+
+.session-timer .timer-icon {
+  font-size: 12px;
+}
+
+#timer-text {
+  font-family: monospace;
+  font-size: 10px;
+  letter-spacing: 0.5px;
 }
 
 /* Committed content sections */
